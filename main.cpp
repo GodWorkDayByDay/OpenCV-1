@@ -1,3 +1,4 @@
+
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include <opencv/cxcore.h>
@@ -350,88 +351,155 @@ int main(int argc, char** argv)
     SiftFeatureDetector siftdtc;
     vector<KeyPoint>kp1,kp2;
     
-    IplImage* input = cvLoadImage("/Users/zhaowenichi/tmp.bmp",0);
-    IplImage* data  = cvLoadImage("/Users/zhaowenichi/0207202791.bmp",0);
-   
+    IplImage* input = cvLoadImage("/Users/zhaowenichi/test3.jpeg",0);
+    IplImage* data  = cvLoadImage("/Users/zhaowenichi/tmp.bmp",0);
+    //-- Step 1: Detect the keypoints using SURF Detector
+    int minHessian = 400;
+    
+    SurfFeatureDetector detector( minHessian );
+    
+    std::vector<KeyPoint> keypoints_1, keypoints_2;
+    
+    detector.detect( input, keypoints_1 );
+    detector.detect( data, keypoints_2 );
+    
+    //-- Step 2: Calculate descriptors (feature vectors)
+    SurfDescriptorExtractor extractor;
+    
+    Mat descriptors_1, descriptors_2;
+    
+    extractor.compute( input, keypoints_1, descriptors_1 );
+    extractor.compute( data, keypoints_2, descriptors_2 );
+    
+    //-- Step 3: Matching descriptor vectors using FLANN matcher
+    FlannBasedMatcher matcher;
+    std::vector< DMatch > matches;
+    matcher.match( descriptors_1, descriptors_2, matches );
+    
+    double max_dist = 0; double min_dist = 100;
+    
+    //-- Quick calculation of max and min distances between keypoints
+    for( int i = 0; i < descriptors_1.rows; i++ )
+    { double dist = matches[i].distance;
+        if( dist < min_dist ) min_dist = dist;
+        if( dist > max_dist ) max_dist = dist;
+    }
+    
+    printf("-- Max dist : %f \n", max_dist );
+    printf("-- Min dist : %f \n", min_dist );
+    
+    //-- Draw only "good" matches (i.e. whose distance is less than 2*min_dist,
+    //-- or a small arbitary value ( 0.02 ) in the event that min_dist is very
+    //-- small)
+    //-- PS.- radiusMatch can also be used here.
+    std::vector< DMatch > good_matches;
+    
+    for( int i = 0; i < descriptors_1.rows; i++ )
+    { if( matches[i].distance <= max(2*min_dist, 0.02) )
+    { good_matches.push_back( matches[i]); }
+    }
+    
+    //-- Draw only "good" matches
+    Mat img_matches;
+    drawMatches( input, keypoints_1, data, keypoints_2,
+                good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
+                vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+    
+    //-- Show detected matches
+    imshow( "Good Matches", img_matches );
+    
+    for( int i = 0; i < (int)good_matches.size(); i++ )
+    { printf( "-- Good Match [%d] Keypoint 1: %d  -- Keypoint 2: %d  \n", i, good_matches[i].queryIdx, good_matches[i].trainIdx ); }
+
     
     //sift特征点
-   /* siftdtc.detect(input,kp1);
-    Mat outimg1;
-    drawKeypoints(input,kp1,outimg1);
-    imshow("image1 keypoints",outimg1);
-    KeyPoint kp;
-    vector<KeyPoint>::iterator itvc;
-    for(itvc=kp1.begin();itvc!=kp1.end();itvc++)
-    {
-        cout<<"angle:"<<itvc->angle<<"\t"<<itvc->class_id<<"\t"<<itvc->octave<<"\t"<<itvc->pt<<"\t"<<itvc->response<<endl;
-    }
+//    siftdtc.detect(input,kp1);
+//    Mat outimg1;
+//    drawKeypoints(input,kp1,outimg1);
+//    imshow("image1 keypoints",outimg1);
+//    KeyPoint kp;
+//    vector<KeyPoint>::iterator itvc;
+//    for(itvc=kp1.begin();itvc!=kp1.end();itvc++)
+//    {
+//        cout<<"angle:"<<itvc->angle<<"\t"<<itvc->class_id<<"\t"<<itvc->octave<<"\t"<<itvc->pt<<"\t"<<itvc->response<<endl;
+//    }
+//    
+//    siftdtc.detect(data,kp2);
+//    Mat outimg2;
+//    drawKeypoints(data,kp2,outimg2);
+//    imshow("image2 keypoints",outimg2);
+//    
+//    SiftDescriptorExtractor extractor;
+//    Mat descriptor1,descriptor2;
+//    BruteForceMatcher<L2<float>> matcher;
+//    vector<DMatch> matches;
+//    Mat img_matches;
+//    extractor.compute(input,kp1,descriptor1);
+//    extractor.compute(data,kp2,descriptor2);
+//    imshow("desc",descriptor1);
+//    cout<<endl<<descriptor1<<endl;
+//    matcher.match(descriptor1,descriptor2,matches);
+//    
+//    drawMatches(input,kp1,data,kp2,matches,img_matches);
+//    imshow("matches",img_matches);
+//    
     
-    siftdtc.detect(data,kp2);
-    Mat outimg2;
-    drawKeypoints(data,kp2,outimg2);
-    imshow("image2 keypoints",outimg2);
-    
-    SiftDescriptorExtractor extractor;
-    Mat descriptor1,descriptor2;
-    BruteForceMatcher<L2<float>> matcher;
-    vector<DMatch> matches;
-    Mat img_matches;
-    extractor.compute(input,kp1,descriptor1);
-    extractor.compute(data,kp2,descriptor2);
-    imshow("desc",descriptor1);
-    cout<<endl<<descriptor1<<endl;
-    matcher.match(descriptor1,descriptor2,matches);
-    
-    drawMatches(input,kp1,data,kp2,matches,img_matches);
-    imshow("matches",img_matches);
-    */
-    
-    //方向场
-    Mat img=imread("/Users/zhaowenichi/Desktop/ScreenShot.png",0);
-    cv::threshold(img,img,128,255,THRESH_BINARY);
-    Mat thinned;
-    
-    thinned=img.clone();
-    //Thinning(img,thinned);
-    
-    //cv::GaussianBlur(thinned,thinned,Size(3,3),1.0);
-    Mat gx,gy,ang,mag,aa,bb;
-    cv::Sobel(thinned,gx,CV_32FC1,1,0,7);
-    cv::Sobel(thinned,gy,CV_32FC1,0,1,7);
-    cv::phase(gx,gy,ang,false);
-    cv::magnitude(gx,gy,mag);
-    
-    cv::normalize(mag,mag,0,1,NORM_MINMAX);
-    
-    
-    Mat angRes=Mat::zeros(img.rows,img.cols,CV_8UC1);
-    
-    int blockSize=img.cols/15-1;
-    float r=blockSize;
-    
-    for (int i=0;i< img.rows-blockSize;i+= blockSize)
-    {
-        for (int j=0;j< img.cols-blockSize;j+= blockSize)
-        {
-            aa=mag(Rect(j,i,blockSize,blockSize));
-            bb=ang(Rect(j,i,blockSize,blockSize));
-            float a=GetWeightedAngle(aa,bb);
-            
-            float dx=r*cos(a);
-            float dy=r*sin(a);
-            int x=j;
-            int y=i;
-            
-            cv::line(angRes,cv::Point(x,y),cv::Point(x+dx,y+dy),Scalar::all(255),1,CV_AA);
-        }
-    }
-    imshow("ang",angRes);
-    imshow("source",img);
-    cv::waitKey(0);
-    
-    
-    
-    
+//    //方向场
+//    Mat img=imread("/Users/zhaowenichi/test1.jpeg",0);
+//    
+//    //imshow("source",img);
+//    cv::threshold(img,img,128,255,THRESH_BINARY);//二值化
+//    //imshow("source",img);
+//    
+//    
+//    
+//    
+//    Mat thinned;
+//    
+//    thinned=img.clone();
+//    //Thinning(img,thinned);
+//    
+//    cv::GaussianBlur(thinned,thinned,Size(3,3),1.0);
+//    Mat gx,gy,ang,mag,aa,bb;
+//    cv::Sobel(thinned,gx,CV_32FC1,1,0,7);//梯度x分量
+////    cout<<gx.rows<<gx.cols;
+//    cv::Sobel(thinned,gy,CV_32FC1,0,1,7);//梯度y分量
+//    
+//    cv::phase(gx,gy,ang,false);
+//    
+//    cv::magnitude(gx,gy,mag);
+//    
+//    cv::normalize(mag,mag,0,1,NORM_MINMAX);
+//   
+//    
+//    Mat angRes=Mat::zeros(img.rows,img.cols,CV_8UC1);
+//    
+//    int blockSize=img.cols/15-1;
+//    float r=blockSize;
+//    
+//    for (int i=0;i< img.rows-blockSize;i+= blockSize)
+//    {
+//        for (int j=0;j< img.cols-blockSize;j+= blockSize)
+//        {
+//            aa=mag(Rect(j,i,blockSize,blockSize));
+//            bb=ang(Rect(j,i,blockSize,blockSize));
+//            float a=GetWeightedAngle(aa,bb);
+//            
+//            float dx=r*cos(a);
+//            float dy=r*sin(a);
+//            int x=j;
+//            int y=i;
+//            
+//            cv::line(angRes,cv::Point(x,y),cv::Point(x+dx,y+dy),Scalar::all(255),1,CV_AA);
+//        }
+//    }
+//    imshow("ang",angRes);
+//    imshow("source",img);
+//    cv::waitKey(0);
+//
+//    
+//    
+//    
     
     
     
@@ -439,6 +507,7 @@ int main(int argc, char** argv)
     
     /*
     int sum ;
+    /*
     for (size_t y=1; y<input->height; y++)
     {
         uchar* ptr = (uchar *)input->imageData +  y   *input->widthStep;
@@ -449,8 +518,8 @@ int main(int argc, char** argv)
             else
             ptr[x]=255;
         }
-    }
-    
+    }*/
+    /*cv::threshold(img,img,128,255,THRESH_BINARY);
     for (size_t y=2; y<input->height-1; y++)
     {
         uchar* ptr1 = (uchar *)input->imageData +  y   *input->widthStep;
